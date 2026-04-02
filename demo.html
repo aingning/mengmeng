@@ -12,7 +12,6 @@ html, body {
   margin: 0;
   background: #000;
   overflow: hidden;
-  touch-action: none; /* 防止iOS双击缩放 */
 }
 canvas {
   position: absolute;
@@ -20,28 +19,27 @@ canvas {
   height: 100%;
   z-index: 1;
 }
-/* 音乐控制按钮优化 - 增大触控区域 */
+/* 音乐控制按钮样式 */
 #music-control {
   position: fixed;
-  bottom: 30px;
-  right: 30px;
+  bottom: 20px;
+  right: 20px;
   z-index: 999;
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   background: rgba(234, 128, 176, 0.3);
   border: 2px solid #ea80b0;
   border-radius: 50%;
   color: #ea80b0;
-  font-size: 24px;
-  line-height: 46px;
+  font-size: 20px;
+  line-height: 36px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s;
-  -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
-  user-select: none;
 }
-#music-control:active {
-  transform: scale(0.95);
+#music-control:hover {
+  background: rgba(234, 128, 176, 0.6);
+  transform: scale(1.1);
 }
 #music-control.playing {
   animation: rotate 3s linear infinite;
@@ -50,44 +48,19 @@ canvas {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
-/* 首次点击提示 */
-#play-hint {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #ea80b0;
-  font-size: 18px;
-  z-index: 998;
-  background: rgba(0,0,0,0.7);
-  padding: 15px 30px;
-  border-radius: 25px;
-  border: 1px solid #ea80b0;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.5s;
-}
 </style>
 </head>
 <body>
 
 <canvas id="pinkboard"></canvas>
 
-<!-- 优化后的音频标签 -->
+<!-- 背景音乐：优化预加载策略，添加iOS兼容性属性 -->
 <audio id="bg-music" loop preload="metadata" playsinline webkit-playsinline x5-playsinline>
-  <!-- 必须转换为MP3格式，文件名改为 mengmeng.mp3 -->
   <source src="mengmeng.mp3" type="audio/mpeg">
-  <!-- 提供ogg备选格式兼容旧版安卓 -->
-  <source src="mengmeng.ogg" type="audio/ogg">
-  <!-- 再提供一个低码率版本给移动网络 -->
-  <source src="mengmeng-mobile.mp3" type="audio/mpeg">
 </audio>
 
-<!-- 首次播放提示 -->
-<div id="play-hint">点击任意处开启音乐 ♪</div>
-
 <!-- 音乐控制按钮 -->
-<div id="music-control" onclick="toggleMusic(event)">♪</div>
+<div id="music-control" onclick="toggleMusic()">♪</div>
 
 <script>
 /*
@@ -296,18 +269,20 @@ var ParticlePool = (function() {
   }, 10);
 })(document.getElementById('pinkboard'));
 
-// ========== 优化后的音乐控制逻辑 ==========
+// ==================== 优化后的音乐控制逻辑 ====================
 var music = document.getElementById('bg-music');
 var musicBtn = document.getElementById('music-control');
-var playHint = document.getElementById('play-hint');
 var isPlaying = false;
-var hasInteracted = false;
+var isAudioUnlocked = false; // iOS音频解锁状态
 
-// iOS/安卓兼容性播放函数
+// 兼容iOS的播放函数
 function playAudio() {
-  // 对于iOS，必须先解除静音状态
-  music.muted = false;
+  // iOS需要先加载音频
+  if (music.readyState === 0) {
+    music.load();
+  }
   
+  // 尝试播放
   var playPromise = music.play();
   
   if (playPromise !== undefined) {
@@ -315,15 +290,13 @@ function playAudio() {
       musicBtn.classList.add('playing');
       musicBtn.innerHTML = '♫';
       isPlaying = true;
-      playHint.style.opacity = '0';
+      isAudioUnlocked = true;
     }).catch(function(error) {
       console.log('播放失败:', error);
-      isPlaying = false;
-      // 显示提示让用户点击
-      playHint.style.opacity = '1';
-      setTimeout(function() {
-        playHint.style.opacity = '0';
-      }, 3000);
+      // iOS需要用户先交互，显示提示
+      if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        alert('请点击屏幕任意位置，然后点击音乐按钮播放');
+      }
     });
   }
 }
@@ -335,9 +308,7 @@ function pauseAudio() {
   isPlaying = false;
 }
 
-function toggleMusic(e) {
-  if(e) e.stopPropagation(); // 防止冒泡触发body点击
-  
+function toggleMusic() {
   if (isPlaying) {
     pauseAudio();
   } else {
@@ -345,32 +316,28 @@ function toggleMusic(e) {
   }
 }
 
-// 页面首次交互处理（解决iOS自动播放限制）
-function handleFirstInteraction() {
-  if (!hasInteracted) {
-    hasInteracted = true;
-    // iOS需要首次交互后才能播放
-    playAudio();
+// iOS兼容性：首次触摸屏幕解锁音频上下文
+function unlockAudio() {
+  if (!isAudioUnlocked) {
+    // 创建一个短暂的静音播放来解锁iOS音频
+    music.volume = 0;
+    music.play().then(function() {
+      music.pause();
+      music.volume = 1;
+      isAudioUnlocked = true;
+      // 解锁后如果用户之前想播放，自动播放
+      if (musicBtn.classList.contains('playing')) {
+        playAudio();
+      }
+    }).catch(function(e) {
+      console.log('音频解锁失败，等待用户点击');
+    });
   }
 }
 
-// 监听多种用户交互事件（提高兼容性）
-['touchstart', 'click', 'touchend'].forEach(function(event) {
-  document.body.addEventListener(event, handleFirstInteraction, {once: true});
-});
-
-// 音频加载错误处理
-music.addEventListener('error', function(e) {
-  console.error('音频加载失败:', e);
-  musicBtn.style.display = 'none';
-  alert('背景音乐加载失败，请检查文件格式是否为MP3');
-});
-
-// 监听音频结束（虽然设置了loop，但某些浏览器可能不兼容）
-music.addEventListener('ended', function() {
-  this.currentTime = 0;
-  this.play();
-}, false);
+// 监听多种交互事件（提高iOS兼容性）
+document.addEventListener('touchstart', unlockAudio, {once: true});
+document.addEventListener('click', unlockAudio, {once: true});
 
 // 页面可见性变化处理（切换标签页暂停，返回继续）
 document.addEventListener('visibilitychange', function() {
@@ -379,6 +346,15 @@ document.addEventListener('visibilitychange', function() {
   } else {
     if (isPlaying) playAudio();
   }
+});
+
+// 音频加载错误处理
+music.addEventListener('error', function(e) {
+  console.error('音频加载失败:', e);
+  musicBtn.style.opacity = '0.5';
+  musicBtn.onclick = function() {
+    alert('音频加载失败，请检查文件是否存在');
+  };
 });
 </script>
 
