@@ -54,15 +54,18 @@ canvas {
 <canvas id="pinkboard"></canvas>
 
 <!-- 背景音乐 -->
-<audio id="bg-music" loop preload="auto">
+<!-- <audio id="bg-music" loop preload="auto"> -->
   <!-- <source src="小意 - Angel.flac" type="audio/flac"> -->
   <!-- 如果转成了MP3，取消下面这行的注释 -->
-  <source src="mengmeng.mp3" type="audio/mpeg">
+  <!-- <source src="mengmeng.mp3" type="audio/mpeg"> -->
   <!-- 您的浏览器不支持音频播放 -->
+<!-- </audio> -->
+ <audio id="bg-music" loop preload="metadata" playsinline webkit-playsinline x5-playsinline>
+  <source src="mengmeng.mp3" type="audio/mpeg">
 </audio>
 
 <!-- 音乐控制按钮 -->
-<div id="music-control" onclick="toggleMusic()">♪</div>
+<div id="music-control" onclick="toggleMusic(event)">♪</div>
 
 <script>
 /*
